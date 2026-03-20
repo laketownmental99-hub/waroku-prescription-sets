@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Warokuå¦æ¹ã»ãã v6.4
+// @name         Waroku処方セット v6.4
 // @namespace    http://tampermonkey.net/
 // @version      6.4
-// @description  å¦æ¹åæãã¼ã¿ã«åºã¥ãã·ãã¥ã¨ã¼ã·ã§ã³å¥å¦æ¹ã»ããï¼GitHubå¤é¨JSONã»å¨ç¨æ³å¯¾å¿ã»ã»ã«ã³ãã¢ãã¿ã¼å¯¾å¿ï¼
+// @description  処方分析データに基づくシチュエーション別処方セット（GitHub外部JSON・全用法対応・セカンドモニター対応）
 // @match        https://lmc.karte.waroku.net/*
 // @grant        GM_xmlhttpRequest
 // @connect      raw.githubusercontent.com
@@ -11,7 +11,7 @@
 (function() {
 'use strict';
 
-/* ============ è¨­å® ============ */
+/* ============ 設定 ============ */
 var GITHUB_JSON_URL = 'https://raw.githubusercontent.com/laketownmental99-hub/waroku-prescription-sets/main/prescription-sets.json';
 
 var STORAGE_KEY = 'waroku_prescription_sets_v6';
@@ -19,7 +19,7 @@ var SETS_VERSION_KEY = 'waroku_prescription_sets_version_v6';
 var USER_CUSTOM_KEY = 'waroku_user_custom_sets_v6';
 var CURRENT_VERSION = '6.4';
 
-/* ============ ãã¼ã¿ç®¡ç ============ */
+/* ============ データ管理 ============ */
 function loadSets() {
   try {
     var s = localStorage.getItem(STORAGE_KEY);
@@ -70,12 +70,12 @@ function getSets(callback) {
       callback(sets);
     } else {
       callback([]);
-      alert('å¦æ¹ã»ããã®èª­ã¿è¾¼ã¿ã«å¤±æãã¾ãããGitHub URLãç¢ºèªãã¦ãã ããã');
+      alert('処方セットの読み込みに失敗しました。GitHub URLを確認してください。');
     }
   });
 }
 
-/* ============ ç¨æ³ã­ã£ãã·ã¥ ============ */
+/* ============ 用法キャッシュ ============ */
 var cachedAdminTypes = null;
 var cachedAdminFlat = null;
 var adminLoadPromise = null;
@@ -152,7 +152,7 @@ function toFullWidth(str) {
   if (!str) return '';
   return str.replace(/[0-9]/g, function(c) {
     return String.fromCharCode(c.charCodeAt(0) + 0xFEE0);
-  }).replace(/\./g, 'ï¼').replace(/,/g, 'ï¼').replace(/ /g, 'ã');
+  }).replace(/\./g, '．').replace(/,/g, '，').replace(/ /g, '　');
 }
 
 function normalizeAdmin(str) {
@@ -179,15 +179,15 @@ function findAdminObj(list, name) {
   found = list.find(function(a) { return a.name && normName.indexOf(normalizeAdmin(a.name)) >= 0; });
   return found || null;
 }
-/* ============ è¬å¤å¥åã³ã¢é¢æ° ============ */
+/* ============ 薬剤入力コア関数 ============ */
 function injectMedicine(med) {
   var ctx = getAngularContext();
   if (!ctx) {
-    alert('ã«ã«ãç»é¢ãè¦ã¤ããã¾ããã');
+    alert('カルテ画面が見つかりません。');
     return;
   }
   if (!ctx.orderRps) {
-    alert('ãªã¼ãã¼ç»é¢ã¾ãã¯Doãªã¼ãã¼ãã©ã¼ã ãéãã¦ãã ããã');
+    alert('オーダー画面またはDoオーダーフォームを開いてください。');
     return;
   }
   var $timeout = ctx.$timeout;
@@ -204,7 +204,7 @@ function injectMedicine(med) {
       list = res;
     }
     if (!list || !list.length) {
-      alert(med.searchText + ' ãè¦ã¤ããã¾ãã');
+      alert(med.searchText + ' が見つかりません');
       return;
     }
 
@@ -217,8 +217,8 @@ function injectMedicine(med) {
       medicineName: found.name || found.medicineName,
       genericName: null,
       dose: med.dose || '1',
-      dosageForm: med.dosageForm || 'éå¸¸',
-      unit: found.unit ? found.unit.name : 'é ',
+      dosageForm: med.dosageForm || '通常',
+      unit: found.unit ? found.unit.name : '錠',
       denyGeneric: med.denyGeneric || false,
       excludePublicInsurance: med.excludePublicInsurance || false,
       comment: null,
@@ -262,13 +262,13 @@ function injectMedicine(med) {
       });
     });
   }).catch(function(err) {
-    alert(med.searchText + ' ã®æ¤ç´¢ã«å¤±æãã¾ãã');
+    alert(med.searchText + ' の検索に失敗しました');
     console.error('injectMedicine error:', err);
   });
 }
 
 window.injectMedicine = injectMedicine;
-/* ============ ã¹ã¿ã¤ã« ============ */
+/* ============ スタイル ============ */
 var STYLE = document.createElement('style');
 STYLE.textContent = '\
 .mt{font-family:sans-serif;font-size:13px}\
@@ -320,7 +320,7 @@ STYLE.textContent = '\
 .mt-admin-dd .mt-admin-item:hover{background:#e3f2fd}\
 ';
 document.head.appendChild(STYLE);
-/* ============ ããã«UI ============ */
+/* ============ パネルUI ============ */
 var panelEl = null;
 var popupWin = null;
 var popupActive = false;
@@ -337,23 +337,23 @@ function createPanel(container, sets) {
 
     var hdr = document.createElement('div');
     hdr.className = 'mt-hdr';
-    hdr.innerHTML = '<span>å¦æ¹ã»ãã v6.4</span><div class="mt-hdr-btns"></div>';
+    hdr.innerHTML = '<span>処方セット v6.4</span><div class="mt-hdr-btns"></div>';
     var btns = hdr.querySelector('.mt-hdr-btns');
 
     var popBtn = document.createElement('button');
     popBtn.textContent = '\u29C9';
-    popBtn.title = 'ã»ã«ã³ãã¢ãã¿ã¼ã«ç§»å';
+    popBtn.title = 'セセンドモニターに移動';
     popBtn.onclick = function() { openPopup(); };
     btns.appendChild(popBtn);
 
     var minBtn = document.createElement('button');
     minBtn.textContent = '\u2212';
-    minBtn.title = 'æå°å';
+    minBtn.title = '最小化';
     btns.appendChild(minBtn);
 
     var closeBtn = document.createElement('button');
     closeBtn.textContent = '\u2715';
-    closeBtn.title = 'éãã';
+    closeBtn.title = '閉じる';
     closeBtn.onclick = function() { wrapper.style.display = 'none'; };
     btns.appendChild(closeBtn);
 
@@ -374,27 +374,27 @@ function createPanel(container, sets) {
     };
 
     var editBtn = document.createElement('button');
-    editBtn.textContent = '\u270F\uFE0F ç·¨é';
+    editBtn.textContent = '\u270F\uFE0F 編集';
     editBtn.onclick = function() { openEditor(); };
     footer.appendChild(editBtn);
 
     var exportBtn = document.createElement('button');
-    exportBtn.textContent = '\uD83D\uDCE4 æ¸åº';
-    exportBtn.title = 'ã«ã¹ã¿ã ãã¼ã¿ãJSONã§ã¨ã¯ã¹ãã¼ã';
+    exportBtn.textContent = '\uD83D\uDCE4 書出';
+    exportBtn.title = 'カスタムデータをJSONでエクスポート';
     exportBtn.onclick = function() { exportSets(); };
     footer.appendChild(exportBtn);
 
     var importBtn = document.createElement('button');
-    importBtn.textContent = '\uD83D\uDCE5 èª­è¾¼';
-    importBtn.title = 'JSONãããã¼ã¿ãã¤ã³ãã¼ã';
+    importBtn.textContent = '\uD83D\uDCE5 読込';
+    importBtn.title = 'JSONからデータをインポート';
     importBtn.onclick = function() { importSets(); };
     footer.appendChild(importBtn);
 
     var resetBtn = document.createElement('button');
-    resetBtn.textContent = '\uD83D\uDD04 ãªã»ãã';
-    resetBtn.title = 'GitHubããããã©ã«ãã«æ»ã';
+    resetBtn.textContent = '\uD83D\uDD04 リセット';
+    resetBtn.title = 'GitHubからデフォルトに戻す';
     resetBtn.onclick = function() {
-      if (confirm('å¦æ¹ã»ãããGitHubã®ããã©ã«ãã«æ»ãã¾ããï¼')) {
+      if (confirm('処方セットをGitHubのデフォルトに戻しますか？')) {
         localStorage.removeItem(STORAGE_KEY);
         localStorage.removeItem(SETS_VERSION_KEY);
         refreshPanel();
@@ -418,24 +418,24 @@ function createPanel(container, sets) {
     footer2.style.padding = '8px';
 
     var editBtn2 = document.createElement('button');
-    editBtn2.textContent = '\u270F\uFE0F ç·¨é';
+    editBtn2.textContent = '\u270F\uFE0F 編集';
     editBtn2.onclick = function() { openEditor(); };
     footer2.appendChild(editBtn2);
 
     var exportBtn2 = document.createElement('button');
-    exportBtn2.textContent = '\uD83D\uDCE4 æ¸åº';
+    exportBtn2.textContent = '\uD83D\uDCE4 書出';
     exportBtn2.onclick = function() { exportSets(); };
     footer2.appendChild(exportBtn2);
 
     var importBtn2 = document.createElement('button');
-    importBtn2.textContent = '\uD83D\uDCE5 èª­è¾¼';
+    importBtn2.textContent = '\uD83D\uDCE5 読込';
     importBtn2.onclick = function() { importSets(); };
     footer2.appendChild(importBtn2);
 
     var resetBtn2 = document.createElement('button');
-    resetBtn2.textContent = '\uD83D\uDD04 ãªã»ãã';
+    resetBtn2.textContent = '\uD83D\uDD04 リセット';
     resetBtn2.onclick = function() {
-      if (confirm('å¦æ¹ã»ãããGitHubã®ããã©ã«ãã«æ»ãã¾ããï¼')) {
+      if (confirm('処方セットをGitHubのデフォルトに戻しますか？')) {
         localStorage.removeItem(STORAGE_KEY);
         localStorage.removeItem(SETS_VERSION_KEY);
         refreshPanel();
@@ -487,10 +487,10 @@ function buildSetList(container, sets) {
 
       var info = document.createElement('span');
       info.className = 'dinfo';
-      info.textContent = med.dose + '\u00D7' + med.numOfDays + 'æ¥';
+      info.textContent = med.dose + '\u00D7' + med.numOfDays + '日';
       drug.appendChild(info);
 
-      drug.title = med.searchText + '\nç¨é: ' + med.dose + ' / ç¨æ³: ' + med.administration + ' / ' + med.numOfDays + 'æ¥';
+      drug.title = med.searchText + '\n用量: ' + med.dose + ' / 用法: ' + med.administration + ' / ' + med.numOfDays + '日';
 
       drug.onclick = function(e) {
         e.stopPropagation();
@@ -540,14 +540,14 @@ function makeDraggable(el, handle) {
   });
 }
 
-/* ============ ã»ã«ã³ãã¢ãã¿ã¼(Popup) ============ */
+/* ============ セカンドモニター(Popup) ============ */
 function openPopup() {
   if (popupWin && !popupWin.closed) { popupWin.focus(); return; }
   popupWin = window.open('', 'rx_popup', 'width=360,height=700,scrollbars=yes,resizable=yes');
-  if (!popupWin) { alert('ãããã¢ããããã­ãã¯ããã¾ãããè¨±å¯ãã¦ãã ããã'); return; }
+  if (!popupWin) { alert('ポップアップがブロックされました。許可してください。'); return; }
   popupActive = true;
 
-  popupWin.document.write('<html><head><title>å¦æ¹ã»ãã</title></head><body></body></html>');
+  popupWin.document.write('<html><head><title>処方セット</title></head><body></body></html>');
   popupWin.document.close();
 
   var style = popupWin.document.createElement('style');
@@ -590,7 +590,7 @@ function cleanupDropdowns() {
   document.querySelectorAll('.mt-search-dd,.mt-admin-dd').forEach(function(e) { e.remove(); });
 }
 
-/* ============ ã¨ã¯ã¹ãã¼ã/ã¤ã³ãã¼ã ============ */
+/* ============ エクスポート/インポート ============ */
 function exportSets() {
   getSets(function(sets) {
     var exportData = {
@@ -629,15 +629,15 @@ function importSets() {
         } else if (Array.isArray(data)) {
           importedSets = data;
         } else {
-          alert('ç¡å¹ãªãã¡ã¤ã«å½¢å¼ã§ãã');
+          alert('無効なファイル形式です。');
           return;
         }
 
         var mode = prompt(
-          'ã¤ã³ãã¼ãæ¹æ³ãé¸æãã¦ãã ãã:\n' +
-          '1 = ç¾å¨ã®ãã¼ã¿ã«è¿½å ï¼ãã¼ã¸ï¼\n' +
-          '2 = ç¾å¨ã®ãã¼ã¿ãç½®æ\n' +
-          'ã­ã£ã³ã»ã« = ä¸­æ­¢',
+          'インポート方法を選択してください:\n' +
+          '1 = 現在のデータに追加（マージ）\n' +
+          '2 = 現在のデータを置換\n' +
+          'キャンセル = 中止',
           '1'
         );
 
@@ -658,18 +658,18 @@ function importSets() {
             });
             saveSets(currentSets);
             refreshPanel();
-            alert('ã¤ã³ãã¼ãå®äºï¼ãã¼ã¸ï¼: ' + importedSets.length + ' ã»ããå¦çãã¾ããã');
+            alert('インポート完了（マージ）: ' + importedSets.length + ' セット処理しました。');
           });
         } else if (mode === '2') {
-          if (confirm('ç¾å¨ã®ãã¼ã¿ãå®å¨ã«ç½®ãæãã¾ããï¼ãã®æä½ã¯åã«æ»ãã¾ããã')) {
+          if (confirm('現在のデータを完全に置き換えますか？この操作は元に戻せません。')) {
             saveSets(importedSets);
             localStorage.setItem(SETS_VERSION_KEY, CURRENT_VERSION);
             refreshPanel();
-            alert('ã¤ã³ãã¼ãå®äºï¼ç½®æï¼: ' + importedSets.length + ' ã»ããèª­ã¿è¾¼ã¿ã¾ããã');
+            alert('インポート完了（置換）: ' + importedSets.length + ' セット読み込みました。');
           }
         }
       } catch(err) {
-        alert('JSONã®èª­ã¿è¾¼ã¿ã«å¤±æãã¾ãã: ' + err.message);
+        alert('JSONの読み込みに失敗しました: ' + err.message);
       }
     };
     reader.readAsText(file);
@@ -677,7 +677,7 @@ function importSets() {
   input.click();
 }
 
-/* ============ å¦æ¹ã»ããç·¨éãã¤ã¢ã­ã° ============ */
+/* ============ 処方セット編集ダイアログ ============ */
 function openEditor(setIdx) {
   getSets(function(sets) {
     var editIdx = (typeof setIdx === 'number') ? setIdx : -1;
@@ -691,7 +691,7 @@ function openEditor(setIdx) {
 
     var hdr = document.createElement('div');
     hdr.className = 'mt-dlg-hdr';
-    hdr.innerHTML = '<span>å¦æ¹ã»ããç·¨é</span>';
+    hdr.innerHTML = '<span>処方セット編集</span>';
     var closeBtn = document.createElement('button');
     closeBtn.textContent = '\u2715';
     closeBtn.style.cssText = 'background:none;border:none;color:#fff;font-size:18px;cursor:pointer';
@@ -710,7 +710,7 @@ function openEditor(setIdx) {
 
     var optNew = document.createElement('option');
     optNew.value = '-1';
-    optNew.textContent = '\uFF0B æ°ããã»ãããè¿½å ';
+    optNew.textContent = '\uFF0B 新しいセットを追加';
     sel.appendChild(optNew);
 
     sets.forEach(function(s, i) {
@@ -724,12 +724,12 @@ function openEditor(setIdx) {
     selWrap.appendChild(sel);
 
     var delSetBtn = document.createElement('button');
-    delSetBtn.textContent = '\uD83D\uDDD1 ã»ããåé¤';
+    delSetBtn.textContent = '\uD83D\uDDD1 セット削除';
     delSetBtn.style.cssText = 'padding:4px 10px;border:1px solid #d32f2f;color:#d32f2f;border-radius:4px;cursor:pointer;background:#fff;font-size:12px';
     delSetBtn.onclick = function() {
       var idx = parseInt(sel.value);
       if (idx < 0) return;
-      if (confirm(sets[idx].label + ' ãåé¤ãã¾ããï¼')) {
+      if (confirm(sets[idx].label + ' を削除しますか？')) {
         sets.splice(idx, 1);
         saveSets(sets);
         cleanupDropdowns();
@@ -751,7 +751,7 @@ function openEditor(setIdx) {
       var idx = parseInt(sel.value);
       var current;
       if (idx < 0) {
-        current = { label: 'æ°ããã»ãã', color: '#1976d2', medicines: [] };
+        current = { label: '新しいセット', color: '#1976d2', medicines: [] };
       } else {
         current = sets[idx];
       }
@@ -762,7 +762,7 @@ function openEditor(setIdx) {
       var nameInput = document.createElement('input');
       nameInput.type = 'text';
       nameInput.value = current.label;
-      nameInput.placeholder = 'ã»ããå';
+      nameInput.placeholder = 'セット名';
       nameInput.style.cssText = 'flex:1;padding:6px 10px;border:1px solid #ccc;border-radius:4px;font-size:13px';
       nameInput.oninput = function() { current.label = nameInput.value; };
       nameRow.appendChild(nameInput);
@@ -784,10 +784,10 @@ function openEditor(setIdx) {
       editArea.appendChild(medsContainer);
 
       var addBtn = document.createElement('button');
-      addBtn.textContent = '\uFF0B è¬å¤è¿½å ';
+      addBtn.textContent = '\uFF0B 薬剤追加';
       addBtn.style.cssText = 'margin-top:6px;padding:6px 12px;border:1px solid #1976d2;color:#1976d2;border-radius:4px;cursor:pointer;background:#fff;font-size:12px';
       addBtn.onclick = function() {
-        var newMed = { searchText: '', dose: '1', administration: '', numOfDays: '28', dosageForm: 'éå¸¸', denyGeneric: false, excludePublicInsurance: false, odp: false, comment: '' };
+        var newMed = { searchText: '', dose: '1', administration: '', numOfDays: '28', dosageForm: '通常', denyGeneric: false, excludePublicInsurance: false, odp: false, comment: '' };
         current.medicines.push(newMed);
         medsContainer.appendChild(buildMedRow(newMed, current));
       };
@@ -805,13 +805,13 @@ function openEditor(setIdx) {
     foot.className = 'mt-dlg-foot';
 
     var cancelBtn = document.createElement('button');
-    cancelBtn.textContent = 'ã­ã£ã³ã»ã«';
+    cancelBtn.textContent = 'キャンセル';
     cancelBtn.onclick = function() { cleanupDropdowns(); overlay.remove(); };
     foot.appendChild(cancelBtn);
 
     var saveBtn = document.createElement('button');
     saveBtn.className = 'save';
-    saveBtn.textContent = 'ä¿å­';
+    saveBtn.textContent = '保存';
     saveBtn.onclick = function() {
       var cur = editArea._current;
       var idx = editArea._idx;
@@ -836,7 +836,7 @@ function openEditor(setIdx) {
     });
   });
 }
-/* ============ è¬å¤è¡ãã«ãã¼ ============ */
+/* ============ 薬剤行ビルダー ============ */
 function buildMedRow(med, setObj) {
   var row = document.createElement('div');
   row.className = 'mt-row';
@@ -847,7 +847,7 @@ function buildMedRow(med, setObj) {
   var upBtn = document.createElement('button');
   upBtn.className = 'del-btn';
   upBtn.textContent = '\u25B2';
-  upBtn.title = 'ä¸ã¸ç§»å';
+  upBtn.title = '上へ移動';
   upBtn.style.cssText = 'color:#1976d2;cursor:pointer;font-size:10px;padding:1px 5px;border:none;background:none;line-height:1';
   upBtn.onclick = function() {
     var mi = setObj.medicines.indexOf(med);
@@ -863,7 +863,7 @@ function buildMedRow(med, setObj) {
   var downBtn = document.createElement('button');
   downBtn.className = 'del-btn';
   downBtn.textContent = '\u25BC';
-  downBtn.title = 'ä¸ã¸ç§»å';
+  downBtn.title = '下へ移動';
   downBtn.style.cssText = 'color:#1976d2;cursor:pointer;font-size:10px;padding:1px 5px;border:none;background:none;line-height:1';
   downBtn.onclick = function() {
     var mi = setObj.medicines.indexOf(med);
@@ -882,7 +882,7 @@ function buildMedRow(med, setObj) {
   var del = document.createElement('button');
   del.className = 'del-btn';
   del.textContent = '\u2715';
-  del.title = 'åé¤';
+  del.title = '削除';
   del.style.cssText = 'color:#d32f2f;cursor:pointer;font-size:13px;padding:1px 5px;border:none;background:none;line-height:1';
   del.onclick = function() {
     var mi = setObj.medicines.indexOf(med);
@@ -897,12 +897,12 @@ function buildMedRow(med, setObj) {
   searchWrap.className = 'mt-search-wrap';
   searchWrap.style.cssText = 'flex:1;min-width:200px';
   var lbl1 = document.createElement('label');
-  lbl1.textContent = 'è¬å¤å';
+  lbl1.textContent = '薬剤名';
   searchWrap.appendChild(lbl1);
   var searchInput = document.createElement('input');
   searchInput.type = 'text';
   searchInput.value = med.searchText || '';
-  searchInput.placeholder = 'è¬å¤æ¤ç´¢...';
+  searchInput.placeholder = '薬剤検索...';
   searchInput.style.cssText = 'width:100%;padding:4px 6px;font-size:12px;border:1px solid #ccc;border-radius:3px';
   searchWrap.appendChild(searchInput);
 
@@ -957,7 +957,7 @@ function buildMedRow(med, setObj) {
   var doseWrap = document.createElement('div');
   doseWrap.style.cssText = 'min-width:55px';
   var lbl2 = document.createElement('label');
-  lbl2.textContent = 'ç¨é';
+  lbl2.textContent = '用量';
   doseWrap.appendChild(lbl2);
   var doseInput = document.createElement('input');
   doseInput.type = 'text';
@@ -971,12 +971,12 @@ function buildMedRow(med, setObj) {
   adminWrap.className = 'mt-search-wrap';
   adminWrap.style.cssText = 'min-width:160px;flex:1';
   var lbl3 = document.createElement('label');
-  lbl3.textContent = 'ç¨æ³';
+  lbl3.textContent = '用法';
   adminWrap.appendChild(lbl3);
   var adminInput = document.createElement('input');
   adminInput.type = 'text';
   adminInput.value = med.administration || '';
-  adminInput.placeholder = 'ç¨æ³ãé¸æã¾ãã¯æ¤ç´¢...';
+  adminInput.placeholder = '用法を選択または検索...';
   adminInput.style.cssText = 'width:100%;padding:4px 6px;font-size:12px;border:1px solid #ccc;border-radius:3px';
   adminWrap.appendChild(adminInput);
 
@@ -1055,7 +1055,7 @@ function buildMedRow(med, setObj) {
   var daysWrap = document.createElement('div');
   daysWrap.style.cssText = 'min-width:55px';
   var lbl4 = document.createElement('label');
-  lbl4.textContent = 'æ¥æ°';
+  lbl4.textContent = '日数';
   daysWrap.appendChild(lbl4);
   var daysInput = document.createElement('input');
   daysInput.type = 'text';
@@ -1072,10 +1072,10 @@ function buildMedRow(med, setObj) {
   var dfWrap = document.createElement('div');
   dfWrap.style.cssText = 'min-width:70px';
   var lbl5 = document.createElement('label');
-  lbl5.textContent = 'å½¢ç¶';
+  lbl5.textContent = '形状';
   dfWrap.appendChild(lbl5);
   var dfSel = document.createElement('select');
-  ['éå¸¸','ç²ç ','æº¶è§£','ãã¼ã'].forEach(function(v) {
+  ['通常','粉砕','溶解','ヒート'].forEach(function(v) {
     var opt = document.createElement('option');
     opt.value = v; opt.textContent = v;
     if (med.dosageForm === v) opt.selected = true;
@@ -1101,19 +1101,19 @@ function buildMedRow(med, setObj) {
     return wrap;
   }
 
-  row.appendChild(mkChk('å¾çºä¸å¯', 'denyGeneric'));
-  row.appendChild(mkChk('å¬è²»å¯¾è±¡å¤', 'excludePublicInsurance'));
-  row.appendChild(mkChk('ä¸åå', 'odp'));
+  row.appendChild(mkChk('後発不可', 'denyGeneric'));
+  row.appendChild(mkChk('公費対象外', 'excludePublicInsurance'));
+  row.appendChild(mkChk('一包化', 'odp'));
 
   var cmtWrap = document.createElement('div');
   cmtWrap.style.cssText = 'min-width:120px;flex:1';
   var lbl6 = document.createElement('label');
-  lbl6.textContent = 'ã³ã¡ã³ã';
+  lbl6.textContent = 'コメント';
   cmtWrap.appendChild(lbl6);
   var cmtInput = document.createElement('input');
   cmtInput.type = 'text';
   cmtInput.value = med.comment || '';
-  cmtInput.placeholder = 'ã³ã¡ã³ã';
+  cmtInput.placeholder = 'コメント';
   cmtInput.style.cssText = 'width:100%;padding:4px 6px;font-size:12px;border:1px solid #ccc;border-radius:3px';
   cmtInput.oninput = function() { med.comment = cmtInput.value; };
   cmtWrap.appendChild(cmtInput);
@@ -1122,7 +1122,7 @@ function buildMedRow(med, setObj) {
   return row;
 }
 
-/* ============ åæå ============ */
+/* ============ 初期化 ============ */
 function init() {
   if (popupActive) return;
   if (document.getElementById('mt-panel')) return;
